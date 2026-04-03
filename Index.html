@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>My MultiStream - Final Setup</title>
+    <style>
+        :root { --bg: #050505; --nav: #121212; --accent: #3ea6ff; --border: #222; --text: #eee; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        
+        .navbar { 
+            height: 55px; background: var(--nav); display: flex; align-items: center; 
+            justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border);
+            z-index: 100; position: relative;
+        }
+
+        body.is-fullscreen .navbar { display: none; }
+        body.is-fullscreen #videoGrid { height: 100vh; }
+
+        .controls-group { display: flex; gap: 8px; align-items: center; }
+
+        .btn { 
+            background: #222; border: 1px solid var(--border); color: #888; 
+            padding: 8px 14px; cursor: pointer; border-radius: 4px; font-size: 0.85rem;
+        }
+        .btn:hover { background: #333; color: white; border-color: var(--accent); }
+        .btn.active { border-color: var(--accent); color: var(--accent); background: #1a2633; }
+        .btn-primary { background: var(--accent); color: black; border: none; font-weight: bold; }
+
+        #videoGrid {
+            display: grid; gap: 4px; height: calc(100vh - 55px); padding: 4px;
+            box-sizing: border-box; background: #000;
+        }
+
+        .video-slot { background: #111; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid #1a1a1a; }
+        iframe { width: 100%; height: 100%; border: none; background: black; }
+
+        .add-placeholder { position: absolute; z-index: 5; }
+        .btn-add-video { background: #1a1a1a; border: 1px solid #444; color: #666; padding: 12px 20px; cursor: pointer; border-radius: 4px; }
+        .btn-add-video:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* DROPDOWN MEJORADO */
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-content {
+            display: none; position: absolute; background-color: #1a1a1a;
+            min-width: 220px; box-shadow: 0px 8px 16px rgba(0,0,0,0.5);
+            z-index: 110; right: 0; border: 1px solid var(--border); border-radius: 4px;
+        }
+        .dropdown:hover .dropdown-content { display: block; }
+        
+        .layout-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 5px 10px; border-bottom: 1px solid #222;
+        }
+        .layout-item:hover { background: #252525; }
+        .layout-item span { cursor: pointer; flex-grow: 1; padding: 8px 0; font-size: 0.9rem; }
+        .btn-delete { color: #ff4e4e; background: none; border: none; cursor: pointer; font-size: 1rem; padding: 5px 10px; }
+        .btn-delete:hover { color: red; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo" style="font-weight:bold; color:var(--accent)">MY MULTISTREAM</div>
+        
+        <div class="controls-group">
+            <button class="btn" id="btn2" onclick="cambiarLayout(2, this)">2x2</button>
+            <button class="btn" id="btn3" onclick="cambiarLayout(3, this)">3x3</button>
+            <button class="btn" id="btn4" onclick="cambiarLayout(4, this)">4x4</button>
+            <div style="width:1px; height:20px; background:#444; margin:0 5px"></div>
+            <button class="btn" onclick="toggleFullScreen()">⛶ Maximizar</button>
+        </div>
+
+        <div class="controls-group">
+            <div class="dropdown">
+                <button class="btn">📁 Mis Layouts ▼</button>
+                <div class="dropdown-content" id="listaGuardados"></div>
+            </div>
+            <button class="btn btn-primary" onclick="guardarSesion()">💾 Guardar</button>
+        </div>
+    </nav>
+
+    <div id="videoGrid"></div>
+
+    <script>
+        let layoutActual = 2;
+        let videosCargados = {}; 
+
+        function generarCuadros(cantidad, linksPrevious = {}) {
+            const grid = document.getElementById('videoGrid');
+            grid.innerHTML = ''; 
+            grid.style.gridTemplateColumns = `repeat(${cantidad}, 1fr)`;
+            grid.style.gridTemplateRows = `repeat(${cantidad}, 1fr)`;
+            layoutActual = cantidad;
+
+            for (let i = 0; i < (cantidad * cantidad); i++) {
+                const slot = document.createElement('div');
+                slot.className = 'video-slot';
+                const videoId = linksPrevious[i] || "";
+                
+                slot.innerHTML = `
+                    <div class="add-placeholder" id="placeholder-${i}" style="display: ${videoId ? 'none' : 'flex'}">
+                        <button class="btn-add-video" onclick="pedirURL(${i})">+ Añadir YouTube</button>
+                    </div>
+                    <iframe id="frame-${i}" src="${videoId ? 'https://www.youtube-nocookie.com/embed/'+videoId+'?autoplay=1&mute=1&rel=0' : ''}" allow="autoplay; fullscreen"></iframe>
+                `;
+                grid.appendChild(slot);
+            }
+            actualizarBotonesLayout();
+        }
+
+        function pedirURL(index) {
+            const url = prompt("Pega el link de YouTube:");
+            if (!url) return;
+            let id = "";
+            if (url.includes("v=")) id = url.split("v=")[1].split("&")[0];
+            else if (url.includes("youtu.be/")) id = url.split("youtu.be/")[1].split("?")[0];
+            
+            if (id) {
+                document.getElementById(`frame-${index}`).src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&rel=0&modestbranding=1`;
+                document.getElementById(`placeholder-${index}`).style.display = 'none';
+                videosCargados[index] = id;
+            }
+        }
+
+        function actualizarBotonesLayout() {
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            const btn = document.getElementById('btn' + layoutActual);
+            if(btn) btn.classList.add('active');
+        }
+
+        function cambiarLayout(n, btn) {
+            if(Object.keys(videosCargados).length > 0) {
+                if(!confirm("¿Quieres cambiar de layout? Se perderán los videos actuales.")) return;
+            }
+            videosCargados = {};
+            generarCuadros(n);
+        }
+
+        function guardarSesion() {
+            const nombre = prompt("Nombre para este Multistream:");
+            if(!nombre) return;
+            const data = { layout: layoutActual, videos: videosCargados };
+            localStorage.setItem("ms_" + nombre, JSON.stringify(data));
+            cargarListaGuardados();
+        }
+
+        function cargarListaGuardados() {
+            const lista = document.getElementById('listaGuardados');
+            lista.innerHTML = "";
+            let hayGuardados = false;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                let clave = localStorage.key(i);
+                if (clave.startsWith("ms_")) {
+                    hayGuardados = true;
+                    let nombreLimpio = clave.replace("ms_", "");
+                    
+                    let div = document.createElement('div');
+                    div.className = 'layout-item';
+                    div.innerHTML = `
+                        <span onclick="cargarLayout('${clave}')">📺 ${nombreLimpio}</span>
+                        <button class="btn-delete" onclick="eliminarLayout('${clave}')">×</button>
+                    `;
+                    lista.appendChild(div);
+                }
+            }
+            if(!hayGuardados) lista.innerHTML = "<p style='padding:10px; color:#666'>No hay guardados</p>";
+        }
+
+        function cargarLayout(clave) {
+            let data = JSON.parse(localStorage.getItem(clave));
+            videosCargados = data.videos;
+            generarCuadros(data.layout, data.videos);
+        }
+
+        function eliminarLayout(clave) {
+            if(confirm("¿Eliminar este layout?")) {
+                localStorage.removeItem(clave);
+                cargarListaGuardados();
+            }
+        }
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                document.body.classList.add('is-fullscreen');
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) document.body.classList.remove('is-fullscreen');
+        });
+
+        generarCuadros(2);
+        cargarListaGuardados();
+    </script>
+</body>
+</html>
